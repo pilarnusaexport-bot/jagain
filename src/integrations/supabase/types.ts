@@ -14,13 +14,194 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      group_invites: {
+        Row: {
+          created_at: string
+          email: string
+          expires_at: string
+          group_id: string
+          id: string
+          invite_code: string
+          invited_by: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          expires_at?: string
+          group_id: string
+          id?: string
+          invite_code?: string
+          invited_by: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          expires_at?: string
+          group_id?: string
+          id?: string
+          invite_code?: string
+          invited_by?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_invites_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "health_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_members: {
+        Row: {
+          can_view_health: boolean
+          group_id: string
+          id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          can_view_health?: boolean
+          group_id: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          can_view_health?: boolean
+          group_id?: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "health_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      health_groups: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      health_records: {
+        Row: {
+          created_at: string
+          id: string
+          metric_type: string
+          recorded_at: string
+          shared_with_groups: boolean
+          source: string
+          unit: string
+          updated_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metric_type: string
+          recorded_at: string
+          shared_with_groups?: boolean
+          source?: string
+          unit: string
+          updated_at?: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metric_type?: string
+          recorded_at?: string
+          shared_with_groups?: boolean
+          source?: string
+          unit?: string
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          birth_date: string | null
+          created_at: string
+          display_name: string
+          gender: string | null
+          id: string
+          share_health_by_default: boolean
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          birth_date?: string | null
+          created_at?: string
+          display_name?: string
+          gender?: string | null
+          id: string
+          share_health_by_default?: boolean
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          birth_date?: string | null
+          created_at?: string
+          display_name?: string
+          gender?: string | null
+          id?: string
+          share_health_by_default?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_group_member: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_group_owner: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
