@@ -73,8 +73,8 @@ function HealthTracker() {
       if (data.user) {
         await supabase.from("profiles").upsert({
           id: data.user.id,
-          display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? "Pengguna SehatKita",
-          avatar_url: data.user.user_metadata?.avatar_url ?? null,
+          display_name: data.user.user_metadata?.["full_name"] ?? data.user.user_metadata?.["name"] ?? "Pengguna SehatKita",
+          avatar_url: data.user.user_metadata?.["avatar_url"] ?? null,
         });
         const { data: groups } = await supabase.from("health_groups").select("id").limit(1);
         if (groups?.[0]) setGroupId(groups[0].id);
