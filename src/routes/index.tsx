@@ -58,6 +58,7 @@ function HealthTracker() {
   const [groupName, setGroupName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [groupCreated, setGroupCreated] = useState(true);
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
   const [notice, setNotice] = useState("");
 
@@ -67,7 +68,18 @@ function HealthTracker() {
       setInstallPrompt(event as InstallPrompt);
     };
     window.addEventListener("beforeinstallprompt", onInstall);
-    void supabase.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user)));
+    void supabase.auth.getUser().then(async ({ data }) => {
+      setSignedIn(Boolean(data.user));
+      if (data.user) {
+        await supabase.from("profiles").upsert({
+          id: data.user.id,
+          display_name: data.user.user_metadata?.full_name ?? data.user.user_metadata?.name ?? "Pengguna SehatKita",
+          avatar_url: data.user.user_metadata?.avatar_url ?? null,
+        });
+        const { data: groups } = await supabase.from("health_groups").select("id").limit(1);
+        if (groups?.[0]) setGroupId(groups[0].id);
+      }
+    });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => setSignedIn(Boolean(session?.user)));
     return () => {
       window.removeEventListener("beforeinstallprompt", onInstall);
@@ -98,6 +110,39 @@ function HealthTracker() {
       return;
     }
     setNotice("Buka menu browser, lalu pilih ‘Tambahkan ke layar utama’ atau ‘Install app’. ");
+  }
+
+  async function saveGroup() {
+    if (!groupName.trim()) {
+      setNotice("Nama group perlu diisi.");
+      return;
+    }
+    if (signedIn) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        const { data, error } = await supabase.from("health_groups").insert({ name: groupName.trim(), owner_id: userData.user.id }).select("id").single();
+        if (error) { setNotice("Group belum berhasil dibuat. Silakan coba lagi."); return; }
+        setGroupId(data.id);
+      }
+    }
+    setGroupCreated(true);
+    setNotice(`Group ${groupName} berhasil dibuat.`);
+    setModal(null);
+  }
+
+  async function sendInvite() {
+    if (!inviteEmail.includes("@")) {
+      setNotice("Masukkan alamat email yang valid.");
+      return;
+    }
+    if (signedIn && groupId) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        const { error } = await supabase.from("group_invites").insert({ group_id: groupId, invited_by: userData.user.id, email: inviteEmail.trim() });
+        if (error) { setNotice("Undangan belum berhasil dibuat. Silakan coba lagi."); return; }
+      }
+    }
+    setInviteSent(true);
   }
 
   if (!signedIn && !demoMode) {
@@ -166,7 +211,7 @@ function HealthTracker() {
             <p className="mt-1 text-sm text-muted-foreground">{modal === "group" ? "Beri nama untuk lingkar kesehatan keluargamu." : "Undangan berlaku selama 7 hari."}</p>
             <Input className="mt-5 h-12 bg-card" type={modal === "invite" ? "email" : "text"} placeholder={modal === "invite" ? "nama@email.com" : "Contoh: Keluarga Sari"} value={modal === "invite" ? inviteEmail : groupName} onChange={(e) => modal === "invite" ? setInviteEmail(e.target.value) : setGroupName(e.target.value)} />
             {inviteSent && <p className="mt-3 flex items-center gap-2 text-sm font-medium text-primary"><Check className="size-4" /> Undangan siap dibagikan.</p>}
-            <Button size="touch" variant="clay" className="mt-4 w-full" onClick={() => { if (modal === "group") { setGroupCreated(true); setNotice(`Group ${groupName || "keluarga"} berhasil dibuat.`); setModal(null); } else { setInviteSent(true); } }}>{modal === "group" ? "Buat group" : "Kirim undangan"}</Button>
+            <Button size="touch" variant="clay" className="mt-4 w-full" onClick={modal === "group" ? saveGroup : sendInvite}>{modal === "group" ? "Buat group" : "Kirim undangan"}</Button>
           </section>
         </div>
       )}
