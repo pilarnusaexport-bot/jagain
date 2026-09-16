@@ -10,33 +10,44 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicHealthConnectSyncRouteImport } from './routes/api/public/health-connect/sync'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHealthConnectSyncRoute =
+  ApiPublicHealthConnectSyncRouteImport.update({
+    id: '/api/public/health-connect/sync',
+    path: '/api/public/health-connect/sync',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/health-connect/sync': typeof ApiPublicHealthConnectSyncRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/health-connect/sync': typeof ApiPublicHealthConnectSyncRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/health-connect/sync': typeof ApiPublicHealthConnectSyncRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/public/health-connect/sync'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/public/health-connect/sync'
+  id: '__root__' | '/' | '/api/public/health-connect/sync'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicHealthConnectSyncRoute: typeof ApiPublicHealthConnectSyncRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +59,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/health-connect/sync': {
+      id: '/api/public/health-connect/sync'
+      path: '/api/public/health-connect/sync'
+      fullPath: '/api/public/health-connect/sync'
+      preLoaderRoute: typeof ApiPublicHealthConnectSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicHealthConnectSyncRoute: ApiPublicHealthConnectSyncRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
