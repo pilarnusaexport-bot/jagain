@@ -102,6 +102,7 @@ function HealthTracker() {
   const [group, setGroup] = useState<{ id: string; name: string; members: number; shared: number } | null>(null);
   const [values, setValues] = useState<Record<MetricKey, number | null>>({ sleep: null, steps: null, heart_rate: null });
   const [link, setLink] = useState<DeviceLink | null>(null);
+  const [history, setHistory] = useState<HistoryRow[]>([]);
 
   const loadData = useCallback(async (uid: string) => {
     // Look back a few days: a phone may sync data that belongs to yesterday's
