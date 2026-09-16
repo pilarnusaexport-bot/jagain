@@ -85,6 +85,78 @@ function formatMetric(key: MetricKey, value: number | null): string {
   return `${Math.round(value)} bpm`;
 }
 
+type HistoryRow = { metric_type: MetricKey; value: number; recorded_at: string };
+type Period = "day" | "week" | "month";
+type Bucket = { key: string; label: string; value: number };
+
+const periodMeta: Record<Period, { label: string; title: string; limit: number }> = {
+  day: { label: "Harian", title: "14 hari terakhir", limit: 14 },
+  week: { label: "Mingguan", title: "12 pekan terakhir", limit: 12 },
+  month: { label: "Bulanan", title: "12 bulan terakhir", limit: 12 },
+};
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function bucketOf(period: Period, iso: string): { key: string; label: string } {
+  const date = new Date(iso);
+  if (period === "day") {
+    return {
+      key: `d-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`,
+      label: new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "numeric", month: "short" }).format(date),
+    };
+  }
+  if (period === "week") {
+    const start = startOfWeek(date);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const fmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short" });
+    return { key: `w-${start.toDateString()}`, label: `${fmt.format(start)} – ${fmt.format(end)}` };
+  }
+  return {
+    key: `m-${date.getFullYear()}-${date.getMonth()}`,
+    label: new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(date),
+  };
+}
+
+function buildBuckets(history: HistoryRow[], metric: MetricKey, period: Period): Bucket[] {
+  const daily = new Map<string, { label: string; sort: number; value: number }>();
+  for (const row of history) {
+    if (row.metric_type !== metric) continue;
+    const date = new Date(row.recorded_at);
+    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const existing = daily.get(dayKey);
+    // one value per calendar day; keep the latest record of that day
+    if (!existing || date.getTime() > existing.sort) {
+      daily.set(dayKey, { label: row.recorded_at, sort: date.getTime(), value: row.value });
+    }
+  }
+
+  const groups = new Map<string, { label: string; sort: number; total: number; days: number }>();
+  for (const day of daily.values()) {
+    const { key, label } = bucketOf(period, day.label);
+    const group = groups.get(key) ?? { label, sort: day.sort, total: 0, days: 0 };
+    group.total += day.value;
+    group.days += 1;
+    group.sort = Math.max(group.sort, day.sort);
+    groups.set(key, group);
+  }
+
+  return [...groups.entries()]
+    .sort((a, b) => b[1].sort - a[1].sort)
+    .slice(0, periodMeta[period].limit)
+    .map(([key, group]) => ({
+      key,
+      label: group.label,
+      value: metric === "steps" && period === "day" ? group.total : metric === "steps" ? group.total : group.total / group.days,
+    }));
+}
+
 function HealthTracker() {
   const [tab, setTab] = useState<Tab>("home");
   const [userId, setUserId] = useState<string | null>(null);
