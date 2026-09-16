@@ -107,11 +107,11 @@ function HealthTracker() {
   const loadData = useCallback(async (uid: string) => {
     // Look back a few days: a phone may sync data that belongs to yesterday's
     // calendar day, so always show the most recent value we actually have.
-    const windowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const windowStart = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
 
     const [profileRes, recordsRes, linkRes, membershipRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url, birth_date, gender, share_health_by_default").eq("id", uid).maybeSingle(),
-      supabase.from("health_records").select("metric_type, value, recorded_at").eq("user_id", uid).gte("recorded_at", windowStart.toISOString()).order("recorded_at", { ascending: false }),
+      supabase.from("health_records").select("metric_type, value, recorded_at").eq("user_id", uid).gte("recorded_at", windowStart.toISOString()).order("recorded_at", { ascending: false }).limit(2000),
       supabase.from("health_device_links").select("id, device_name, pair_token, status, last_sync_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("group_members").select("group_id").eq("user_id", uid).limit(1).maybeSingle(),
     ]);
