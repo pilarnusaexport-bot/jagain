@@ -119,11 +119,15 @@ export const Route = createFileRoute("/api/public/health-connect/hcwebhook")({
         }
 
         let payload: Payload;
+        let raw = "";
         try {
-          payload = payloadSchema.parse(await request.json());
+          raw = await request.text();
+          payload = payloadSchema.parse(JSON.parse(raw));
         } catch (error) {
           return json({ error: "invalid_payload", detail: String(error) }, 400);
         }
+
+        console.error(`HC Webhook payload sample: ${raw.slice(0, 1200)}`);
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
