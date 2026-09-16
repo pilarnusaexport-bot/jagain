@@ -93,6 +93,39 @@ export type Database = {
           },
         ]
       }
+      health_device_links: {
+        Row: {
+          created_at: string
+          device_name: string
+          id: string
+          last_sync_at: string | null
+          pair_token: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_name?: string
+          id?: string
+          last_sync_at?: string | null
+          pair_token?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_name?: string
+          id?: string
+          last_sync_at?: string | null
+          pair_token?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       health_groups: {
         Row: {
           created_at: string
