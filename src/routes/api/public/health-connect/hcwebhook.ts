@@ -79,11 +79,31 @@ export const Route = createFileRoute("/api/public/health-connect/hcwebhook")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // The companion app may not support custom headers, so accept the pairing
+        // token from several places: Authorization, x-api-key/api-key/token headers,
+        // or a query string param.
+        const url = new URL(request.url);
         const auth = request.headers.get("authorization") ?? "";
-        const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-        const token = bearer || (request.headers.get("x-api-key") ?? "").trim();
-        if (!/^[a-f0-9]{48}$/.test(token)) {
-          return json({ error: "invalid_pair_token" }, 401);
+        const candidates = [
+          auth.replace(/^(Bearer|Token)\s+/i, ""),
+          request.headers.get("x-api-key") ?? "",
+          request.headers.get("api-key") ?? "",
+          request.headers.get("x-pair-token") ?? "",
+          request.headers.get("token") ?? "",
+          url.searchParams.get("token") ?? "",
+          url.searchParams.get("key") ?? "",
+        ];
+        const token = candidates
+          .map((value) => (value.match(/[a-f0-9]{48}/i)?.[0] ?? "").toLowerCase())
+          .find((value) => value.length === 48) ?? "";
+
+        if (!token) {
+          console.error(
+            `HC Webhook missing token. headers=${JSON.stringify(
+              Object.fromEntries([...request.headers].filter(([k]) => !/cookie/i.test(k))),
+            )} query=${url.search}`,
+          );
+          return json({ error: "invalid_pair_token", hint: "Kirim kode pemasangan lewat header x-api-key atau ?token= di URL." }, 401);
         }
 
         let payload: Payload;
