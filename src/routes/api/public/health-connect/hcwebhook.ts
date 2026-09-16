@@ -32,10 +32,22 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// Health Connect timestamps are instants; buckets must follow the phone's local
+// calendar day, not UTC, otherwise early-morning records land on the previous day.
+const DEFAULT_OFFSET_MINUTES = 7 * 60; // Asia/Jakarta
+
+function offsetMinutes(iso: string): number {
+  const match = iso.match(/([+-])(\d{2}):?(\d{2})$/);
+  if (!match) return DEFAULT_OFFSET_MINUTES; // "Z" or naive strings
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3]));
+}
+
 function dayKey(iso: string): string | null {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
+  const shifted = new Date(date.getTime() + offsetMinutes(iso) * 60_000);
+  return shifted.toISOString().slice(0, 10);
 }
 
 type Row = { metric_type: string; value: number; unit: string; recorded_at: string; source: string };
