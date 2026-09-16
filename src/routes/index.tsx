@@ -315,7 +315,7 @@ function HealthTracker() {
     );
   }
 
-  const firstName = (profile?.display_name ?? "Pengguna").split(" ")[0];
+  const firstName = (profile?.display_name ?? "Pengguna").split(" ")[0] ?? "Pengguna";
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[430px] bg-background">
