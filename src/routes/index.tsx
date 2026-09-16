@@ -439,9 +439,9 @@ function RecordsView({ metrics, link, onConnect, onCopy }: { metrics: Metric[]; 
       <Button className="mt-3 w-full" variant="secondary" onClick={onConnect}>{link ? <><RefreshCw /> Segarkan data</> : "Hubungkan Health Connect"}</Button>
       {link && (
         <div className="mt-3 space-y-2 rounded-md bg-primary-foreground/10 p-3">
-          <p className="text-[11px] leading-4 text-primary-foreground/80">Pasang aplikasi <span className="font-semibold">Health Connect to Webhook</span> di HP Android, lalu tambahkan alamat kiriman berikut:</p>
-          <button type="button" onClick={() => onCopy(endpoint)} className="flex w-full items-center justify-between gap-2 rounded-sm bg-primary-foreground/15 px-2.5 py-2 text-left"><span className="break-all font-mono text-[11px]">{endpoint}</span><Copy className="size-4 shrink-0" /></button>
-          <p className="text-[11px] leading-4 text-primary-foreground/80">Tambahkan juga header khusus <span className="font-mono">x-api-key</span> dengan kode ini, lalu aktifkan Tidur, Langkah, dan Detak Jantung:</p>
+          <p className="text-[11px] leading-4 text-primary-foreground/80">Pasang aplikasi <span className="font-semibold">Health Connect to Webhook</span> di HP Android, lalu tempel alamat lengkap ini (kode sudah termasuk, tidak perlu header tambahan):</p>
+          <button type="button" onClick={() => onCopy(`${endpoint}?token=${link.pair_token}`)} className="flex w-full items-center justify-between gap-2 rounded-sm bg-primary-foreground/15 px-2.5 py-2 text-left"><span className="break-all font-mono text-[11px]">{`${endpoint}?token=${link.pair_token}`}</span><Copy className="size-4 shrink-0" /></button>
+          <p className="text-[11px] leading-4 text-primary-foreground/80">Lalu aktifkan Tidur, Langkah, dan Detak Jantung. Jika ingin memakai header, kodenya:</p>
           <button type="button" onClick={() => onCopy(link.pair_token)} className="flex w-full items-center justify-between gap-2 rounded-sm bg-primary-foreground/15 px-2.5 py-2 text-left"><span className="break-all font-mono text-[11px]">{link.pair_token}</span><Copy className="size-4 shrink-0" /></button>
         </div>
       )}
