@@ -85,6 +85,78 @@ function formatMetric(key: MetricKey, value: number | null): string {
   return `${Math.round(value)} bpm`;
 }
 
+type HistoryRow = { metric_type: MetricKey; value: number; recorded_at: string };
+type Period = "day" | "week" | "month";
+type Bucket = { key: string; label: string; value: number };
+
+const periodMeta: Record<Period, { label: string; title: string; limit: number }> = {
+  day: { label: "Harian", title: "14 hari terakhir", limit: 14 },
+  week: { label: "Mingguan", title: "12 pekan terakhir", limit: 12 },
+  month: { label: "Bulanan", title: "12 bulan terakhir", limit: 12 },
+};
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function bucketOf(period: Period, iso: string): { key: string; label: string } {
+  const date = new Date(iso);
+  if (period === "day") {
+    return {
+      key: `d-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`,
+      label: new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "numeric", month: "short" }).format(date),
+    };
+  }
+  if (period === "week") {
+    const start = startOfWeek(date);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const fmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short" });
+    return { key: `w-${start.toDateString()}`, label: `${fmt.format(start)} – ${fmt.format(end)}` };
+  }
+  return {
+    key: `m-${date.getFullYear()}-${date.getMonth()}`,
+    label: new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(date),
+  };
+}
+
+function buildBuckets(history: HistoryRow[], metric: MetricKey, period: Period): Bucket[] {
+  const daily = new Map<string, { label: string; sort: number; value: number }>();
+  for (const row of history) {
+    if (row.metric_type !== metric) continue;
+    const date = new Date(row.recorded_at);
+    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const existing = daily.get(dayKey);
+    // one value per calendar day; keep the latest record of that day
+    if (!existing || date.getTime() > existing.sort) {
+      daily.set(dayKey, { label: row.recorded_at, sort: date.getTime(), value: row.value });
+    }
+  }
+
+  const groups = new Map<string, { label: string; sort: number; total: number; days: number }>();
+  for (const day of daily.values()) {
+    const { key, label } = bucketOf(period, day.label);
+    const group = groups.get(key) ?? { label, sort: day.sort, total: 0, days: 0 };
+    group.total += day.value;
+    group.days += 1;
+    group.sort = Math.max(group.sort, day.sort);
+    groups.set(key, group);
+  }
+
+  return [...groups.entries()]
+    .sort((a, b) => b[1].sort - a[1].sort)
+    .slice(0, periodMeta[period].limit)
+    .map(([key, group]) => ({
+      key,
+      label: group.label,
+      value: metric === "steps" && period === "day" ? group.total : metric === "steps" ? group.total : group.total / group.days,
+    }));
+}
+
 function HealthTracker() {
   const [tab, setTab] = useState<Tab>("home");
   const [userId, setUserId] = useState<string | null>(null);
@@ -102,21 +174,30 @@ function HealthTracker() {
   const [group, setGroup] = useState<{ id: string; name: string; members: number; shared: number } | null>(null);
   const [values, setValues] = useState<Record<MetricKey, number | null>>({ sleep: null, steps: null, heart_rate: null });
   const [link, setLink] = useState<DeviceLink | null>(null);
+  const [history, setHistory] = useState<HistoryRow[]>([]);
 
   const loadData = useCallback(async (uid: string) => {
     // Look back a few days: a phone may sync data that belongs to yesterday's
     // calendar day, so always show the most recent value we actually have.
-    const windowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const windowStart = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
 
     const [profileRes, recordsRes, linkRes, membershipRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url, birth_date, gender, share_health_by_default").eq("id", uid).maybeSingle(),
-      supabase.from("health_records").select("metric_type, value, recorded_at").eq("user_id", uid).gte("recorded_at", windowStart.toISOString()).order("recorded_at", { ascending: false }),
+      supabase.from("health_records").select("metric_type, value, recorded_at").eq("user_id", uid).gte("recorded_at", windowStart.toISOString()).order("recorded_at", { ascending: false }).limit(2000),
       supabase.from("health_device_links").select("id, device_name, pair_token, status, last_sync_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("group_members").select("group_id").eq("user_id", uid).limit(1).maybeSingle(),
     ]);
 
     if (profileRes.data) setProfile(profileRes.data);
     setLink(linkRes.data ?? null);
+
+    setHistory(
+      (recordsRes.data ?? []).map((row) => ({
+        metric_type: row.metric_type as MetricKey,
+        value: Number(row.value),
+        recorded_at: row.recorded_at as string,
+      })),
+    );
 
     const next: Record<MetricKey, number | null> = { sleep: null, steps: null, heart_rate: null };
     for (const row of recordsRes.data ?? []) {
