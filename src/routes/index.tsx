@@ -119,6 +119,14 @@ function HealthTracker() {
     if (profileRes.data) setProfile(profileRes.data);
     setLink(linkRes.data ?? null);
 
+    setHistory(
+      (recordsRes.data ?? []).map((row) => ({
+        metric_type: row.metric_type as MetricKey,
+        value: Number(row.value),
+        recorded_at: row.recorded_at as string,
+      })),
+    );
+
     const next: Record<MetricKey, number | null> = { sleep: null, steps: null, heart_rate: null };
     for (const row of recordsRes.data ?? []) {
       const key = row.metric_type as MetricKey;
