@@ -315,7 +315,7 @@ function HealthTracker() {
     );
   }
 
-  const firstName = (profile?.display_name ?? "Pengguna").split(" ")[0];
+  const firstName = (profile?.display_name ?? "Pengguna").split(" ")[0] ?? "Pengguna";
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[430px] bg-background">
@@ -419,7 +419,7 @@ function HomeView({ dateLabel, firstName, score, metrics, group, onCreate, onInv
 }
 
 function RecordsView({ metrics, link, onConnect, onCopy }: { metrics: Metric[]; link: DeviceLink | null; onConnect: () => void; onCopy: (text: string) => void }) {
-  const endpoint = typeof window === "undefined" ? "" : `${window.location.origin}/api/public/health-connect/sync`;
+  const endpoint = typeof window === "undefined" ? "" : `${window.location.origin}/api/public/health-connect/hcwebhook`;
   const hasData = metrics.some((item) => item.value !== null);
   return <div className="animate-pop">
     <div className="mb-4"><p className="text-xs font-semibold text-primary/70">REKAM KESEHATAN</p><h1 className="font-display text-2xl font-bold">Aktivitas hari ini</h1></div>
@@ -439,9 +439,10 @@ function RecordsView({ metrics, link, onConnect, onCopy }: { metrics: Metric[]; 
       <Button className="mt-3 w-full" variant="secondary" onClick={onConnect}>{link ? <><RefreshCw /> Segarkan data</> : "Hubungkan Health Connect"}</Button>
       {link && (
         <div className="mt-3 space-y-2 rounded-md bg-primary-foreground/10 p-3">
-          <p className="text-[11px] leading-4 text-primary-foreground/80">Masukkan kode dan alamat ini di aplikasi Android pendamping agar Health Connect mengirim data ke akunmu.</p>
-          <button type="button" onClick={() => onCopy(link.pair_token)} className="flex w-full items-center justify-between gap-2 rounded-sm bg-primary-foreground/15 px-2.5 py-2 text-left"><span className="break-all font-mono text-[11px]">{link.pair_token}</span><Copy className="size-4 shrink-0" /></button>
+          <p className="text-[11px] leading-4 text-primary-foreground/80">Pasang aplikasi <span className="font-semibold">Health Connect to Webhook</span> di HP Android, lalu tambahkan alamat kiriman berikut:</p>
           <button type="button" onClick={() => onCopy(endpoint)} className="flex w-full items-center justify-between gap-2 rounded-sm bg-primary-foreground/15 px-2.5 py-2 text-left"><span className="break-all font-mono text-[11px]">{endpoint}</span><Copy className="size-4 shrink-0" /></button>
+          <p className="text-[11px] leading-4 text-primary-foreground/80">Tambahkan juga header khusus <span className="font-mono">x-api-key</span> dengan kode ini, lalu aktifkan Tidur, Langkah, dan Detak Jantung:</p>
+          <button type="button" onClick={() => onCopy(link.pair_token)} className="flex w-full items-center justify-between gap-2 rounded-sm bg-primary-foreground/15 px-2.5 py-2 text-left"><span className="break-all font-mono text-[11px]">{link.pair_token}</span><Copy className="size-4 shrink-0" /></button>
         </div>
       )}
     </section>
