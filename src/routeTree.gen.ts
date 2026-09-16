@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicHealthConnectHcwebhookRouteImport } from './routes/api/public/health-connect/hcwebhook'
 import { Route as ApiPublicHealthConnectSyncRouteImport } from './routes/api/public/health-connect/sync'
 
 const IndexRoute = IndexRouteImport.update({
@@ -17,6 +18,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHealthConnectHcwebhookRoute =
+  ApiPublicHealthConnectHcwebhookRouteImport.update({
+    id: '/api/public/health-connect/hcwebhook',
+    path: '/api/public/health-connect/hcwebhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHealthConnectSyncRoute =
   ApiPublicHealthConnectSyncRouteImport.update({
     id: '/api/public/health-connect/sync',
@@ -26,27 +33,41 @@ const ApiPublicHealthConnectSyncRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/health-connect/hcwebhook': typeof ApiPublicHealthConnectHcwebhookRoute
   '/api/public/health-connect/sync': typeof ApiPublicHealthConnectSyncRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/health-connect/hcwebhook': typeof ApiPublicHealthConnectHcwebhookRoute
   '/api/public/health-connect/sync': typeof ApiPublicHealthConnectSyncRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/health-connect/hcwebhook': typeof ApiPublicHealthConnectHcwebhookRoute
   '/api/public/health-connect/sync': typeof ApiPublicHealthConnectSyncRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/health-connect/sync'
+  fullPaths:
+    | '/'
+    | '/api/public/health-connect/hcwebhook'
+    | '/api/public/health-connect/sync'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/health-connect/sync'
-  id: '__root__' | '/' | '/api/public/health-connect/sync'
+  to:
+    | '/'
+    | '/api/public/health-connect/hcwebhook'
+    | '/api/public/health-connect/sync'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/public/health-connect/hcwebhook'
+    | '/api/public/health-connect/sync'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicHealthConnectHcwebhookRoute: typeof ApiPublicHealthConnectHcwebhookRoute
   ApiPublicHealthConnectSyncRoute: typeof ApiPublicHealthConnectSyncRoute
 }
 
@@ -57,6 +78,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/health-connect/hcwebhook': {
+      id: '/api/public/health-connect/hcwebhook'
+      path: '/api/public/health-connect/hcwebhook'
+      fullPath: '/api/public/health-connect/hcwebhook'
+      preLoaderRoute: typeof ApiPublicHealthConnectHcwebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/health-connect/sync': {
@@ -71,6 +99,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicHealthConnectHcwebhookRoute: ApiPublicHealthConnectHcwebhookRoute,
   ApiPublicHealthConnectSyncRoute: ApiPublicHealthConnectSyncRoute,
 }
 export const routeTree = rootRouteImport

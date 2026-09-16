@@ -419,7 +419,7 @@ function HomeView({ dateLabel, firstName, score, metrics, group, onCreate, onInv
 }
 
 function RecordsView({ metrics, link, onConnect, onCopy }: { metrics: Metric[]; link: DeviceLink | null; onConnect: () => void; onCopy: (text: string) => void }) {
-  const endpoint = typeof window === "undefined" ? "" : `${window.location.origin}/api/public/health-connect/sync`;
+  const endpoint = typeof window === "undefined" ? "" : `${window.location.origin}/api/public/health-connect/hcwebhook`;
   const hasData = metrics.some((item) => item.value !== null);
   return <div className="animate-pop">
     <div className="mb-4"><p className="text-xs font-semibold text-primary/70">REKAM KESEHATAN</p><h1 className="font-display text-2xl font-bold">Aktivitas hari ini</h1></div>
