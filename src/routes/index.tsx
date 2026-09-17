@@ -491,8 +491,13 @@ function HealthTracker() {
             score={score}
             metrics={metrics}
             group={group}
+            sentInvites={sentInvites}
+            incomingInvites={incomingInvites}
             onCreate={() => setModal("group")}
             onInvite={() => { setInviteSent(false); setModal("invite"); }}
+            onRevoke={(id) => void revokeInvite(id)}
+            onAccept={(id) => void acceptInvite(id)}
+            onDecline={(id) => void declineInvite(id)}
           />
         )}
         {tab === "records" && (
