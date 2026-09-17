@@ -1,3 +1,4 @@
 - Saat panel HC tertutup: tombol tetap 'Segarkan data' / 'Hubungkan Health Connect' tanpa ikon expand; expand via tombol kecil terpisah (chevron), segarkan tetap berfungsi saat collapsed (17 Sep 2026)
 - Fitur Gulir di tab Rekam: dropdown untuk pilih "Akunku" (data sendiri) atau ganti ke akun anggota group yang sudah share Rekamnya (17 Sep 2026)
+- Home group card: klik untuk expand daftar anggota keluarga; klik nama anggota yang sudah share → otomatis ke tab Rekam dengan Gulir terpilih ke anggota tersebut (17 Sep 2026)
 - Catatan: Supabase RLS policy untuk health_records perlu diupdate supaya anggota group bisa SELECT data rekan yang can_view_health=true
