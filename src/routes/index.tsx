@@ -500,9 +500,12 @@ function HomeView({ dateLabel, firstName, score, metrics, group, onCreate, onInv
   </div>;
 }
 
-function RecordsView({ metrics, link, onConnect, onCopy }: { metrics: Metric[]; link: DeviceLink | null; onConnect: () => void; onCopy: (text: string) => void }) {
+function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: Metric[]; history: HistoryRow[]; link: DeviceLink | null; onConnect: () => void; onCopy: (text: string) => void }) {
   const endpoint = typeof window === "undefined" ? "" : `${window.location.origin}/api/public/health-connect/hcwebhook`;
   const hasData = metrics.some((item) => item.value !== null);
+  const [period, setPeriod] = useState<Period>("day");
+  const [historyMetric, setHistoryMetric] = useState<MetricKey>("steps");
+  const buckets = useMemo(() => buildBuckets(history, historyMetric, period), [history, historyMetric, period]);
   return <div className="animate-pop">
     <div className="mb-4"><p className="text-xs font-semibold text-primary/70">REKAM KESEHATAN</p><h1 className="font-display text-2xl font-bold">Aktivitas hari ini</h1></div>
     <section className="rounded-lg bg-primary p-4 text-primary-foreground shadow-clay">
