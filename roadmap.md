@@ -1,0 +1,1 @@
+- Saat panel HC tertutup: tombol tetap 'Segarkan data' / 'Hubungkan Health Connect' tanpa ikon expand; expand via tombol kecil terpisah (chevron), segarkan tetap berfungsi saat collapsed (17 Sep 2026)

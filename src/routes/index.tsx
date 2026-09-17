@@ -4,7 +4,9 @@ import {
   Activity,
   Bell,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Copy,
   Download,
   Footprints,
@@ -505,9 +507,18 @@ function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: M
   const hasData = metrics.some((item) => item.value !== null);
   const [period, setPeriod] = useState<Period>("day");
   const [historyMetric, setHistoryMetric] = useState<MetricKey>("steps");
+  const [hcExpanded, setHcExpanded] = useState(true);
   const buckets = useMemo(() => buildBuckets(history, historyMetric, period), [history, historyMetric, period]);
   return <div className="animate-pop">
     <div className="mb-4"><p className="text-xs font-semibold text-primary/70">REKAM KESEHATAN</p><h1 className="font-display text-2xl font-bold">Aktivitas hari ini</h1></div>
+    {!hcExpanded ? (
+      <section className="rounded-lg bg-primary p-3 text-primary-foreground shadow-clay">
+        <div className="flex items-center gap-2">
+          <Button className="flex-1" variant="secondary" onClick={onConnect}>{link ? <><RefreshCw /> Segarkan data</> : "Hubungkan Health Connect"}</Button>
+          <button type="button" aria-label="Buka panel Health Connect" onClick={() => setHcExpanded(true)} className="grid size-11 shrink-0 place-items-center rounded-md bg-primary-foreground/15"><ChevronDown className="size-5" /></button>
+        </div>
+      </section>
+    ) : (
     <section className="rounded-lg bg-primary p-4 text-primary-foreground shadow-clay">
       <div className="flex items-center justify-between">
         <div>
@@ -519,7 +530,10 @@ function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: M
               : link ? "Menunggu data dari aplikasi pendamping" : "Belum terhubung"}
           </p>
         </div>
-        <Smartphone className="size-8" />
+        <button type="button" aria-label="Tutup panel Health Connect" onClick={() => setHcExpanded(false)} className="flex items-start gap-1.5">
+          <Smartphone className="size-8" />
+          <ChevronUp className="mt-0.5 size-4 opacity-70" />
+        </button>
       </div>
       <Button className="mt-3 w-full" variant="secondary" onClick={onConnect}>{link ? <><RefreshCw /> Segarkan data</> : "Hubungkan Health Connect"}</Button>
       {link && (
@@ -531,6 +545,7 @@ function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: M
         </div>
       )}
     </section>
+    )}
     <div className="mt-4 space-y-3">{metrics.map((item) => <section key={item.key} className="rounded-lg bg-card p-4 shadow-clay-sm"><div className="flex items-start gap-3"><div className={`grid size-10 place-items-center rounded-lg ${item.tone}`}><item.icon className="size-5" /></div><div className="flex-1"><div className="flex items-center justify-between"><h2 className="font-display font-semibold">{item.label}</h2><span className="font-display text-lg font-bold">{item.display}</span></div><p className="text-xs text-muted-foreground">{item.value === null ? "Belum ada data" : item.detail}</p><div className="mt-3 h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-secondary" style={{ width: `${item.percent}%` }} /></div></div></div></section>)}</div>
     {!hasData && <p className="mt-4 text-center text-[11px] leading-4 text-muted-foreground">Data akan muncul di sini setelah aplikasi pendamping mengirim rekam dari Health Connect.</p>}
     <section className="mt-4 rounded-lg bg-card p-4 shadow-clay-sm">
