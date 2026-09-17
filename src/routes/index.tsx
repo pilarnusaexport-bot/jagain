@@ -245,12 +245,10 @@ function HealthTracker() {
         .ilike("email", mail)
         .gt("expires_at", new Date().toISOString());
       setIncomingInvites(
-        (inbox ?? [])
-          .filter((row) => !groupId || true)
-          .map((row) => ({
-            id: row.id as string,
-            groupName: ((row as { health_groups?: { name?: string } | null }).health_groups?.name) ?? "Group keluarga",
-          })),
+        (inbox ?? []).map((row) => ({
+          id: row.id as string,
+          groupName: ((row as { health_groups?: { name?: string } | null }).health_groups?.name) ?? "Group keluarga",
+        })),
       );
     } else {
       setIncomingInvites([]);
