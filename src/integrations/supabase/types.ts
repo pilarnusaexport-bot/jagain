@@ -227,7 +227,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      accept_group_invite: { Args: { _invite_id: string }; Returns: string }
+      decline_group_invite: { Args: { _invite_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

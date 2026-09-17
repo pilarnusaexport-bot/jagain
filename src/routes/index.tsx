@@ -13,6 +13,7 @@ import {
   HeartPulse,
   Home,
   LogOut,
+  Mail,
   MoonStar,
   Plus,
   RefreshCw,
@@ -88,6 +89,9 @@ function formatMetric(key: MetricKey, value: number | null): string {
 }
 
 type HistoryRow = { metric_type: MetricKey; value: number; recorded_at: string };
+type InviteRow = { id: string; email: string; status: string; expires_at: string };
+type IncomingInvite = { id: string; groupName: string };
+type GroupInfo = { id: string; name: string; members: number; shared: number; isOwner: boolean };
 type Period = "day" | "week" | "month";
 type Bucket = { key: string; label: string; value: number };
 
@@ -173,12 +177,14 @@ function HealthTracker() {
   const [notice, setNotice] = useState("");
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [group, setGroup] = useState<{ id: string; name: string; members: number; shared: number } | null>(null);
+  const [group, setGroup] = useState<{ id: string; name: string; members: number; shared: number; isOwner: boolean } | null>(null);
   const [values, setValues] = useState<Record<MetricKey, number | null>>({ sleep: null, steps: null, heart_rate: null });
   const [link, setLink] = useState<DeviceLink | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [sentInvites, setSentInvites] = useState<InviteRow[]>([]);
+  const [incomingInvites, setIncomingInvites] = useState<IncomingInvite[]>([]);
 
-  const loadData = useCallback(async (uid: string) => {
+  const loadData = useCallback(async (uid: string, userEmail?: string) => {
     // Look back a few days: a phone may sync data that belongs to yesterday's
     // calendar day, so always show the most recent value we actually have.
     const windowStart = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
@@ -210,9 +216,10 @@ function HealthTracker() {
 
     const groupId = membershipRes.data?.group_id;
     if (groupId) {
-      const [groupRes, membersRes] = await Promise.all([
-        supabase.from("health_groups").select("id, name").eq("id", groupId).maybeSingle(),
+      const [groupRes, membersRes, invitesRes] = await Promise.all([
+        supabase.from("health_groups").select("id, name, owner_id").eq("id", groupId).maybeSingle(),
         supabase.from("group_members").select("id, can_view_health").eq("group_id", groupId),
+        supabase.from("group_invites").select("id, email, status, expires_at").eq("group_id", groupId).order("created_at", { ascending: false }),
       ]);
       if (groupRes.data) {
         setGroup({
@@ -220,10 +227,32 @@ function HealthTracker() {
           name: groupRes.data.name,
           members: membersRes.data?.length ?? 0,
           shared: (membersRes.data ?? []).filter((m) => m.can_view_health).length,
+          isOwner: groupRes.data.owner_id === uid,
         });
       }
+      setSentInvites((invitesRes.data ?? []) as InviteRow[]);
     } else {
       setGroup(null);
+      setSentInvites([]);
+    }
+
+    // Invitations addressed to this user's email address.
+    const mail = (userEmail ?? "").trim().toLowerCase();
+    if (mail) {
+      const { data: inbox } = await supabase
+        .from("group_invites")
+        .select("id, email, status, expires_at, health_groups(name)")
+        .eq("status", "pending")
+        .ilike("email", mail)
+        .gt("expires_at", new Date().toISOString());
+      setIncomingInvites(
+        (inbox ?? []).map((row) => ({
+          id: row.id as string,
+          groupName: ((row as { health_groups?: { name?: string } | null }).health_groups?.name) ?? "Group keluarga",
+        })),
+      );
+    } else {
+      setIncomingInvites([]);
     }
   }, []);
 
@@ -249,7 +278,7 @@ function HealthTracker() {
           },
           { onConflict: "id" },
         );
-        await loadData(data.user.id);
+        await loadData(data.user.id, data.user.email ?? "");
       }
       setReady(true);
     });
@@ -327,26 +356,64 @@ function HealthTracker() {
     setNotice(`Group ${groupName.trim()} berhasil dibuat.`);
     setGroupName("");
     setModal(null);
-    await loadData(userId);
+    await loadData(userId, email);
   }
 
   async function sendInvite() {
-    if (!inviteEmail.includes("@") || !userId || !group) {
+    const target = inviteEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target) || !userId || !group) {
       setNotice("Masukkan alamat email yang valid.");
       return;
     }
-    const { error } = await supabase.from("group_invites").insert({ group_id: group.id, invited_by: userId, email: inviteEmail.trim() });
+    if (target === email.trim().toLowerCase()) {
+      setNotice("Itu alamat emailmu sendiri.");
+      return;
+    }
+    if (sentInvites.some((row) => row.status === "pending" && row.email.toLowerCase() === target)) {
+      setNotice("Undangan ke alamat itu masih menunggu.");
+      return;
+    }
+    const { error } = await supabase.from("group_invites").insert({ group_id: group.id, invited_by: userId, email: target });
     if (error) {
       setNotice("Undangan belum berhasil dibuat. Silakan coba lagi.");
       return;
     }
     setInviteSent(true);
+    setInviteEmail("");
+    await loadData(userId, email);
+  }
+
+  async function revokeInvite(id: string) {
+    if (!userId) return;
+    const { error } = await supabase.from("group_invites").update({ status: "revoked" }).eq("id", id);
+    if (error) {
+      setNotice("Undangan belum bisa dibatalkan.");
+      return;
+    }
+    await loadData(userId, email);
+  }
+
+  async function acceptInvite(id: string) {
+    if (!userId) return;
+    const { error } = await supabase.rpc("accept_group_invite", { _invite_id: id });
+    if (error) {
+      setNotice("Undangan tidak berlaku lagi atau sudah kedaluwarsa.");
+      return;
+    }
+    setNotice("Kamu sudah bergabung ke group.");
+    await loadData(userId, email);
+  }
+
+  async function declineInvite(id: string) {
+    if (!userId) return;
+    await supabase.rpc("decline_group_invite", { _invite_id: id });
+    await loadData(userId, email);
   }
 
   async function connectHealthConnect() {
     if (!userId) return;
     if (link) {
-      await loadData(userId);
+      await loadData(userId, email);
       setNotice(link.last_sync_at ? "Data Health Connect diperbarui." : "Menunggu aplikasi pendamping mengirim data.");
       return;
     }
@@ -425,8 +492,13 @@ function HealthTracker() {
             score={score}
             metrics={metrics}
             group={group}
+            sentInvites={sentInvites}
+            incomingInvites={incomingInvites}
             onCreate={() => setModal("group")}
             onInvite={() => { setInviteSent(false); setModal("invite"); }}
+            onRevoke={(id) => void revokeInvite(id)}
+            onAccept={(id) => void acceptInvite(id)}
+            onDecline={(id) => void declineInvite(id)}
           />
         )}
         {tab === "records" && (
@@ -470,16 +542,39 @@ function HealthTracker() {
   );
 }
 
-function HomeView({ dateLabel, firstName, score, metrics, group, onCreate, onInvite }: {
+function HomeView({ dateLabel, firstName, score, metrics, group, sentInvites, incomingInvites, onCreate, onInvite, onRevoke, onAccept, onDecline }: {
   dateLabel: string;
   firstName: string;
   score: number | null;
   metrics: Metric[];
-  group: { id: string; name: string; members: number; shared: number } | null;
+  group: GroupInfo | null;
+  sentInvites: InviteRow[];
+  incomingInvites: IncomingInvite[];
   onCreate: () => void;
   onInvite: () => void;
+  onRevoke: (id: string) => void;
+  onAccept: (id: string) => void;
+  onDecline: (id: string) => void;
 }) {
+  const pending = sentInvites.filter((row) => row.status === "pending");
   return <div className="animate-pop">
+    {incomingInvites.length > 0 && (
+      <section className="mb-4 animate-rise rounded-lg bg-accent/20 p-4">
+        <div className="flex items-center gap-2"><Mail className="size-4 text-primary" /><h2 className="font-display text-[15px] font-semibold text-primary">Undangan untukmu</h2></div>
+        <ul className="mt-3 space-y-2.5">
+          {incomingInvites.map((invite) => (
+            <li key={invite.id} className="rounded-md bg-card p-3 shadow-clay-sm">
+              <p className="text-xs font-semibold text-primary">{invite.groupName}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Kamu diundang untuk berbagi Rekam kesehatan.</p>
+              <div className="mt-2.5 flex gap-2">
+                <Button size="sm" variant="clay" onClick={() => onAccept(invite.id)}><Check />Terima</Button>
+                <Button size="sm" variant="ghost" onClick={() => onDecline(invite.id)}>Tolak</Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
     <section className="rounded-lg bg-card p-4 shadow-clay">
       <div className="flex items-center justify-between"><p className="text-[11px] font-semibold uppercase text-primary/60">Skor harian</p><span className="rounded-full bg-background px-2.5 py-1 text-[11px] font-semibold text-primary">{dateLabel}</span></div>
       <div className="mt-3 flex items-end justify-between">
@@ -492,10 +587,31 @@ function HomeView({ dateLabel, firstName, score, metrics, group, onCreate, onInv
     <section className="mt-4 animate-rise rounded-lg bg-card p-4 shadow-clay">
       <div className="flex items-center justify-between">
         <div><h2 className="font-display text-[17px] font-semibold">Group keluarga</h2><p className="mt-0.5 text-xs text-muted-foreground">Berbagi Rekam dengan izinmu.</p></div>
-        <Button size="sm" variant="clay" onClick={group ? onInvite : onCreate}>{group ? <Share2 /> : <Plus />}{group ? "Undang" : "Buat"}</Button>
+        {(!group || group.isOwner) && <Button size="sm" variant="clay" onClick={group ? onInvite : onCreate}>{group ? <Share2 /> : <Plus />}{group ? "Undang" : "Buat"}</Button>}
       </div>
       {group
-        ? <div className="mt-4 flex items-center gap-3"><div className="grid size-9 place-items-center rounded-full bg-secondary text-xs font-bold text-primary-foreground ring-2 ring-card">{group.name.charAt(0).toUpperCase()}</div><div><p className="text-xs font-semibold text-primary">{group.name}</p><p className="text-[11px] text-muted-foreground">{group.members} anggota · {group.shared} Rekam dibagikan</p></div><ChevronRight className="ml-auto size-5 text-muted-foreground" /></div>
+        ? <>
+            <div className="mt-4 flex items-center gap-3"><div className="grid size-9 place-items-center rounded-full bg-secondary text-xs font-bold text-primary-foreground ring-2 ring-card">{group.name.charAt(0).toUpperCase()}</div><div><p className="text-xs font-semibold text-primary">{group.name}</p><p className="text-[11px] text-muted-foreground">{group.members} anggota · {group.shared} Rekam dibagikan</p></div><ChevronRight className="ml-auto size-5 text-muted-foreground" /></div>
+            {group.isOwner && (
+              <div className="mt-4 border-t border-border/60 pt-3">
+                <p className="text-[11px] font-semibold uppercase text-primary/60">Undangan terkirim</p>
+                {pending.length === 0
+                  ? <p className="mt-2 text-[11px] text-muted-foreground">Belum ada undangan menunggu. Ketuk “Undang” dan masukkan alamat email.</p>
+                  : <ul className="mt-2 space-y-2">
+                      {pending.map((invite) => (
+                        <li key={invite.id} className="flex items-center gap-2 rounded-md bg-background px-3 py-2">
+                          <Mail className="size-4 shrink-0 text-primary/70" />
+                          <div className="min-w-0">
+                            <p className="truncate text-[11px] font-medium text-foreground">{invite.email}</p>
+                            <p className="text-[10px] text-muted-foreground">Menunggu sampai {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short" }).format(new Date(invite.expires_at))}</p>
+                          </div>
+                          <button className="ml-auto text-[11px] font-semibold text-destructive" onClick={() => onRevoke(invite.id)}>Batalkan</button>
+                        </li>
+                      ))}
+                    </ul>}
+              </div>
+            )}
+          </>
         : <p className="mt-4 text-xs text-muted-foreground">Belum ada group. Buat group untuk mulai berbagi.</p>}
     </section>
     <section className="mt-4 rounded-lg bg-secondary/10 p-3.5"><div className="flex gap-3"><ShieldCheck className="size-5 shrink-0 text-primary" /><p className="text-xs leading-5 text-primary"><span className="font-semibold">Kamu memegang kendali.</span> Data hanya terlihat oleh anggota yang kamu izinkan.</p></div></section>
