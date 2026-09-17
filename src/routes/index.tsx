@@ -88,6 +88,9 @@ function formatMetric(key: MetricKey, value: number | null): string {
 }
 
 type HistoryRow = { metric_type: MetricKey; value: number; recorded_at: string };
+type InviteRow = { id: string; email: string; status: string; expires_at: string };
+type IncomingInvite = { id: string; groupName: string };
+type GroupInfo = { id: string; name: string; members: number; shared: number; isOwner: boolean };
 type Period = "day" | "week" | "month";
 type Bucket = { key: string; label: string; value: number };
 
