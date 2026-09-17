@@ -13,6 +13,7 @@ import {
   HeartPulse,
   Home,
   LogOut,
+  Mail,
   MoonStar,
   Plus,
   RefreshCw,
