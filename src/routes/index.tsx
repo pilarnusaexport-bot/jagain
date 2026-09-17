@@ -536,16 +536,39 @@ function HealthTracker() {
   );
 }
 
-function HomeView({ dateLabel, firstName, score, metrics, group, onCreate, onInvite }: {
+function HomeView({ dateLabel, firstName, score, metrics, group, sentInvites, incomingInvites, onCreate, onInvite, onRevoke, onAccept, onDecline }: {
   dateLabel: string;
   firstName: string;
   score: number | null;
   metrics: Metric[];
-  group: { id: string; name: string; members: number; shared: number } | null;
+  group: GroupInfo | null;
+  sentInvites: InviteRow[];
+  incomingInvites: IncomingInvite[];
   onCreate: () => void;
   onInvite: () => void;
+  onRevoke: (id: string) => void;
+  onAccept: (id: string) => void;
+  onDecline: (id: string) => void;
 }) {
+  const pending = sentInvites.filter((row) => row.status === "pending");
   return <div className="animate-pop">
+    {incomingInvites.length > 0 && (
+      <section className="mb-4 animate-rise rounded-lg bg-accent/20 p-4">
+        <div className="flex items-center gap-2"><Mail className="size-4 text-primary" /><h2 className="font-display text-[15px] font-semibold text-primary">Undangan untukmu</h2></div>
+        <ul className="mt-3 space-y-2.5">
+          {incomingInvites.map((invite) => (
+            <li key={invite.id} className="rounded-md bg-card p-3 shadow-clay-sm">
+              <p className="text-xs font-semibold text-primary">{invite.groupName}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Kamu diundang untuk berbagi Rekam kesehatan.</p>
+              <div className="mt-2.5 flex gap-2">
+                <Button size="sm" variant="clay" onClick={() => onAccept(invite.id)}><Check />Terima</Button>
+                <Button size="sm" variant="ghost" onClick={() => onDecline(invite.id)}>Tolak</Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
     <section className="rounded-lg bg-card p-4 shadow-clay">
       <div className="flex items-center justify-between"><p className="text-[11px] font-semibold uppercase text-primary/60">Skor harian</p><span className="rounded-full bg-background px-2.5 py-1 text-[11px] font-semibold text-primary">{dateLabel}</span></div>
       <div className="mt-3 flex items-end justify-between">
@@ -558,10 +581,31 @@ function HomeView({ dateLabel, firstName, score, metrics, group, onCreate, onInv
     <section className="mt-4 animate-rise rounded-lg bg-card p-4 shadow-clay">
       <div className="flex items-center justify-between">
         <div><h2 className="font-display text-[17px] font-semibold">Group keluarga</h2><p className="mt-0.5 text-xs text-muted-foreground">Berbagi Rekam dengan izinmu.</p></div>
-        <Button size="sm" variant="clay" onClick={group ? onInvite : onCreate}>{group ? <Share2 /> : <Plus />}{group ? "Undang" : "Buat"}</Button>
+        {(!group || group.isOwner) && <Button size="sm" variant="clay" onClick={group ? onInvite : onCreate}>{group ? <Share2 /> : <Plus />}{group ? "Undang" : "Buat"}</Button>}
       </div>
       {group
-        ? <div className="mt-4 flex items-center gap-3"><div className="grid size-9 place-items-center rounded-full bg-secondary text-xs font-bold text-primary-foreground ring-2 ring-card">{group.name.charAt(0).toUpperCase()}</div><div><p className="text-xs font-semibold text-primary">{group.name}</p><p className="text-[11px] text-muted-foreground">{group.members} anggota · {group.shared} Rekam dibagikan</p></div><ChevronRight className="ml-auto size-5 text-muted-foreground" /></div>
+        ? <>
+            <div className="mt-4 flex items-center gap-3"><div className="grid size-9 place-items-center rounded-full bg-secondary text-xs font-bold text-primary-foreground ring-2 ring-card">{group.name.charAt(0).toUpperCase()}</div><div><p className="text-xs font-semibold text-primary">{group.name}</p><p className="text-[11px] text-muted-foreground">{group.members} anggota · {group.shared} Rekam dibagikan</p></div><ChevronRight className="ml-auto size-5 text-muted-foreground" /></div>
+            {group.isOwner && (
+              <div className="mt-4 border-t border-border/60 pt-3">
+                <p className="text-[11px] font-semibold uppercase text-primary/60">Undangan terkirim</p>
+                {pending.length === 0
+                  ? <p className="mt-2 text-[11px] text-muted-foreground">Belum ada undangan menunggu. Ketuk “Undang” dan masukkan alamat email.</p>
+                  : <ul className="mt-2 space-y-2">
+                      {pending.map((invite) => (
+                        <li key={invite.id} className="flex items-center gap-2 rounded-md bg-background px-3 py-2">
+                          <Mail className="size-4 shrink-0 text-primary/70" />
+                          <div className="min-w-0">
+                            <p className="truncate text-[11px] font-medium text-foreground">{invite.email}</p>
+                            <p className="text-[10px] text-muted-foreground">Menunggu sampai {new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short" }).format(new Date(invite.expires_at))}</p>
+                          </div>
+                          <button className="ml-auto text-[11px] font-semibold text-destructive" onClick={() => onRevoke(invite.id)}>Batalkan</button>
+                        </li>
+                      ))}
+                    </ul>}
+              </div>
+            )}
+          </>
         : <p className="mt-4 text-xs text-muted-foreground">Belum ada group. Buat group untuk mulai berbagi.</p>}
     </section>
     <section className="mt-4 rounded-lg bg-secondary/10 p-3.5"><div className="flex gap-3"><ShieldCheck className="size-5 shrink-0 text-primary" /><p className="text-xs leading-5 text-primary"><span className="font-semibold">Kamu memegang kendali.</span> Data hanya terlihat oleh anggota yang kamu izinkan.</p></div></section>
