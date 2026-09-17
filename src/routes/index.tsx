@@ -428,7 +428,7 @@ function HealthTracker() {
           />
         )}
         {tab === "records" && (
-          <RecordsView metrics={metrics} link={link} onConnect={connectHealthConnect} onCopy={(text) => { void navigator.clipboard.writeText(text); setNotice("Disalin."); }} />
+          <RecordsView metrics={metrics} history={history} link={link} onConnect={connectHealthConnect} onCopy={(text) => { void navigator.clipboard.writeText(text); setNotice("Disalin."); }} />
         )}
         {tab === "profile" && (
           <ProfileView
