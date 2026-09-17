@@ -173,12 +173,14 @@ function HealthTracker() {
   const [notice, setNotice] = useState("");
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [group, setGroup] = useState<{ id: string; name: string; members: number; shared: number } | null>(null);
+  const [group, setGroup] = useState<{ id: string; name: string; members: number; shared: number; isOwner: boolean } | null>(null);
   const [values, setValues] = useState<Record<MetricKey, number | null>>({ sleep: null, steps: null, heart_rate: null });
   const [link, setLink] = useState<DeviceLink | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [sentInvites, setSentInvites] = useState<InviteRow[]>([]);
+  const [incomingInvites, setIncomingInvites] = useState<IncomingInvite[]>([]);
 
-  const loadData = useCallback(async (uid: string) => {
+  const loadData = useCallback(async (uid: string, userEmail?: string) => {
     // Look back a few days: a phone may sync data that belongs to yesterday's
     // calendar day, so always show the most recent value we actually have.
     const windowStart = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
@@ -210,9 +212,10 @@ function HealthTracker() {
 
     const groupId = membershipRes.data?.group_id;
     if (groupId) {
-      const [groupRes, membersRes] = await Promise.all([
-        supabase.from("health_groups").select("id, name").eq("id", groupId).maybeSingle(),
+      const [groupRes, membersRes, invitesRes] = await Promise.all([
+        supabase.from("health_groups").select("id, name, owner_id").eq("id", groupId).maybeSingle(),
         supabase.from("group_members").select("id, can_view_health").eq("group_id", groupId),
+        supabase.from("group_invites").select("id, email, status, expires_at").eq("group_id", groupId).order("created_at", { ascending: false }),
       ]);
       if (groupRes.data) {
         setGroup({
@@ -220,10 +223,34 @@ function HealthTracker() {
           name: groupRes.data.name,
           members: membersRes.data?.length ?? 0,
           shared: (membersRes.data ?? []).filter((m) => m.can_view_health).length,
+          isOwner: groupRes.data.owner_id === uid,
         });
       }
+      setSentInvites((invitesRes.data ?? []) as InviteRow[]);
     } else {
       setGroup(null);
+      setSentInvites([]);
+    }
+
+    // Invitations addressed to this user's email address.
+    const mail = (userEmail ?? "").trim().toLowerCase();
+    if (mail) {
+      const { data: inbox } = await supabase
+        .from("group_invites")
+        .select("id, email, status, expires_at, health_groups(name)")
+        .eq("status", "pending")
+        .ilike("email", mail)
+        .gt("expires_at", new Date().toISOString());
+      setIncomingInvites(
+        (inbox ?? [])
+          .filter((row) => !groupId || true)
+          .map((row) => ({
+            id: row.id as string,
+            groupName: ((row as { health_groups?: { name?: string } | null }).health_groups?.name) ?? "Group keluarga",
+          })),
+      );
+    } else {
+      setIncomingInvites([]);
     }
   }, []);
 
