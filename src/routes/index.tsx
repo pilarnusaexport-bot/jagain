@@ -546,7 +546,6 @@ function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: M
       )}
     </section>
     )}
-    <div className="mt-4 space-y-3">{metrics.map((item) => <section key={item.key} className="rounded-lg bg-card p-4 shadow-clay-sm"><div className="flex items-start gap-3"><div className={`grid size-10 place-items-center rounded-lg ${item.tone}`}><item.icon className="size-5" /></div><div className="flex-1"><div className="flex items-center justify-between"><h2 className="font-display font-semibold">{item.label}</h2><span className="font-display text-lg font-bold">{item.display}</span></div><p className="text-xs text-muted-foreground">{item.value === null ? "Belum ada data" : item.detail}</p><div className="mt-3 h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-secondary" style={{ width: `${item.percent}%` }} /></div></div></div></section>)}</div>
     {!hasData && <p className="mt-4 text-center text-[11px] leading-4 text-muted-foreground">Data akan muncul di sini setelah aplikasi pendamping mengirim rekam dari Health Connect.</p>}
     <section className="mt-4 rounded-lg bg-card p-4 shadow-clay-sm">
       <div className="flex items-center justify-between gap-2">
