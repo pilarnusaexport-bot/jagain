@@ -92,6 +92,7 @@ type HistoryRow = { metric_type: MetricKey; value: number; recorded_at: string }
 type InviteRow = { id: string; email: string; status: string; expires_at: string };
 type IncomingInvite = { id: string; groupName: string };
 type SharedMember = { user_id: string; display_name: string; avatar_url: string | null };
+type GroupMember = { user_id: string; display_name: string; avatar_url: string | null; can_view_health: boolean };
 type GroupInfo = { id: string; name: string; members: number; shared: number; isOwner: boolean };
 type Period = "day" | "week" | "month";
 type Bucket = { key: string; label: string; value: number };
@@ -186,6 +187,7 @@ function HealthTracker() {
   const [incomingInvites, setIncomingInvites] = useState<IncomingInvite[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [sharedMembers, setSharedMembers] = useState<SharedMember[]>([]);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
 
   const loadData = useCallback(async (uid: string, userEmail?: string, targetUid?: string) => {
     const viewUid = targetUid ?? uid;
@@ -240,26 +242,39 @@ function HealthTracker() {
       }
       setSentInvites((invitesRes.data ?? []) as InviteRow[]);
 
-      // Fetch profiles of members who have shared their health records
-      const sharedIds = (membersRes.data ?? []).filter((m) => m.can_view_health && m.user_id !== uid).map((m) => m.user_id);
-      if (sharedIds.length > 0) {
-        const { data: memberProfiles } = await supabase
+      // Fetch profiles of all group members (excluding self)
+      const otherMemberIds = (membersRes.data ?? []).filter(m => m.user_id !== uid).map(m => m.user_id);
+      if (otherMemberIds.length > 0) {
+        const { data: allProfiles } = await supabase
           .from("profiles")
           .select("id, display_name, avatar_url")
-          .in("id", sharedIds);
-        setSharedMembers((memberProfiles ?? []).map((p) => ({ user_id: p.id, display_name: p.display_name ?? "Anggota", avatar_url: p.avatar_url ?? null })));
+          .in("id", otherMemberIds);
+        const profileMap = new Map((allProfiles ?? []).map(p => [p.id, { display_name: p.display_name ?? "Anggota", avatar_url: p.avatar_url ?? null }]));
+        const allMembers: GroupMember[] = otherMemberIds.map(id => {
+          const memberData = (membersRes.data ?? []).find(m => m.user_id === id);
+          const profile = profileMap.get(id);
+          return {
+            user_id: id,
+            display_name: profile?.display_name ?? "Anggota",
+            avatar_url: profile?.avatar_url ?? null,
+            can_view_health: memberData?.can_view_health ?? false,
+          };
+        });
+        setGroupMembers(allMembers);
+        setSharedMembers(allMembers.filter(m => m.can_view_health).map(m => ({ user_id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url })));
+        // Reset selection if the member is no longer sharing
+        if (targetUid && !allMembers.some(m => m.user_id === targetUid && m.can_view_health)) {
+          setSelectedMemberId(null);
+        }
       } else {
+        setGroupMembers([]);
         setSharedMembers([]);
-      }
-
-      // Reset selection if the member is no longer sharing
-      if (targetUid && !sharedIds.includes(targetUid)) {
-        setSelectedMemberId(null);
       }
     } else {
       setGroup(null);
       setSentInvites([]);
       setSharedMembers([]);
+      setGroupMembers([]);
       setSelectedMemberId(null);
     }
 
@@ -288,6 +303,11 @@ function HealthTracker() {
     if (userId) {
       await loadData(userId, email, memberId ?? undefined);
     }
+  }
+
+  async function selectMemberAndGoToRecords(memberId: string) {
+    setTab("records");
+    await changeMember(memberId);
   }
 
   useEffect(() => {
@@ -528,11 +548,13 @@ function HealthTracker() {
             group={group}
             sentInvites={sentInvites}
             incomingInvites={incomingInvites}
+            groupMembers={groupMembers}
             onCreate={() => setModal("group")}
             onInvite={() => { setInviteSent(false); setModal("invite"); }}
             onRevoke={(id) => void revokeInvite(id)}
             onAccept={(id) => void acceptInvite(id)}
             onDecline={(id) => void declineInvite(id)}
+            onSelectMember={(id) => void selectMemberAndGoToRecords(id)}
           />
         )}
         {tab === "records" && (
@@ -576,7 +598,7 @@ function HealthTracker() {
   );
 }
 
-function HomeView({ dateLabel, firstName, score, metrics, group, sentInvites, incomingInvites, onCreate, onInvite, onRevoke, onAccept, onDecline }: {
+function HomeView({ dateLabel, firstName, score, metrics, group, sentInvites, incomingInvites, groupMembers, onCreate, onInvite, onRevoke, onAccept, onDecline, onSelectMember }: {
   dateLabel: string;
   firstName: string;
   score: number | null;
@@ -584,13 +606,16 @@ function HomeView({ dateLabel, firstName, score, metrics, group, sentInvites, in
   group: GroupInfo | null;
   sentInvites: InviteRow[];
   incomingInvites: IncomingInvite[];
+  groupMembers: GroupMember[];
   onCreate: () => void;
   onInvite: () => void;
   onRevoke: (id: string) => void;
   onAccept: (id: string) => void;
   onDecline: (id: string) => void;
+  onSelectMember: (memberId: string) => void;
 }) {
   const pending = sentInvites.filter((row) => row.status === "pending");
+  const [groupExpanded, setGroupExpanded] = useState(false);
   return <div className="animate-pop">
     {incomingInvites.length > 0 && (
       <section className="mb-4 animate-rise rounded-lg bg-accent/20 p-4">
@@ -625,7 +650,25 @@ function HomeView({ dateLabel, firstName, score, metrics, group, sentInvites, in
       </div>
       {group
         ? <>
-            <div className="mt-4 flex items-center gap-3"><div className="grid size-9 place-items-center rounded-full bg-secondary text-xs font-bold text-primary-foreground ring-2 ring-card">{group.name.charAt(0).toUpperCase()}</div><div><p className="text-xs font-semibold text-primary">{group.name}</p><p className="text-[11px] text-muted-foreground">{group.members} anggota · {group.shared} Rekam dibagikan</p></div><ChevronRight className="ml-auto size-5 text-muted-foreground" /></div>
+            <button type="button" onClick={() => setGroupExpanded(!groupExpanded)} className="mt-4 flex w-full items-center gap-3 text-left">
+              <div className="grid size-9 place-items-center rounded-full bg-secondary text-xs font-bold text-primary-foreground ring-2 ring-card">{group.name.charAt(0).toUpperCase()}</div>
+              <div className="flex-1"><p className="text-xs font-semibold text-primary">{group.name}</p><p className="text-[11px] text-muted-foreground">{group.members} anggota · {group.shared} Rekam dibagikan</p></div>
+              {groupExpanded ? <ChevronUp className="size-5 text-muted-foreground" /> : <ChevronDown className="size-5 text-muted-foreground" />}
+            </button>
+            {groupExpanded && groupMembers.length > 0 && (
+              <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+                <p className="text-[11px] font-semibold uppercase text-primary/60">Anggota</p>
+                {groupMembers.map((m) => (
+                  <button key={m.user_id} type="button" disabled={!m.can_view_health} onClick={() => m.can_view_health && onSelectMember(m.user_id)} className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left ${m.can_view_health ? "bg-background hover:bg-muted" : "bg-background opacity-50"}`}>
+                    {m.avatar_url
+                      ? <img src={m.avatar_url} alt={m.display_name} className="size-8 rounded-full object-cover" />
+                      : <div className="grid size-8 place-items-center rounded-full bg-secondary text-xs font-bold text-primary-foreground">{m.display_name.charAt(0).toUpperCase()}</div>}
+                    <div className="flex-1"><p className="text-xs font-medium text-foreground">{m.display_name}</p><p className="text-[10px] text-muted-foreground">{m.can_view_health ? "Rekam dibagikan" : "Belum berbagi"}</p></div>
+                    {m.can_view_health && <ChevronRight className="size-4 text-muted-foreground" />}
+                  </button>
+                ))}
+              </div>
+            )}
             {group.isOwner && (
               <div className="mt-4 border-t border-border/60 pt-3">
                 <p className="text-[11px] font-semibold uppercase text-primary/60">Undangan terkirim</p>
