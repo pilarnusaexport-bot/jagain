@@ -412,7 +412,7 @@ function HealthTracker() {
   async function connectHealthConnect() {
     if (!userId) return;
     if (link) {
-      await loadData(userId);
+      await loadData(userId, email);
       setNotice(link.last_sync_at ? "Data Health Connect diperbarui." : "Menunggu aplikasi pendamping mengirim data.");
       return;
     }
