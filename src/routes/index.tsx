@@ -277,7 +277,7 @@ function HealthTracker() {
           },
           { onConflict: "id" },
         );
-        await loadData(data.user.id);
+        await loadData(data.user.id, data.user.email ?? "");
       }
       setReady(true);
     });
