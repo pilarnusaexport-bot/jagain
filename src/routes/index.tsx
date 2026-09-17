@@ -513,7 +513,10 @@ function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: M
     <div className="mb-4"><p className="text-xs font-semibold text-primary/70">REKAM KESEHATAN</p><h1 className="font-display text-2xl font-bold">Aktivitas hari ini</h1></div>
     {!hcExpanded ? (
       <section className="rounded-lg bg-primary p-3 text-primary-foreground shadow-clay">
-        <Button className="w-full" variant="secondary" onClick={() => { setHcExpanded(true); onConnect(); }}>{link ? <><RefreshCw /> Segarkan data</> : "Hubungkan Health Connect"}<ChevronDown className="size-4 opacity-70" /></Button>
+        <div className="flex items-center gap-2">
+          <Button className="flex-1" variant="secondary" onClick={onConnect}>{link ? <><RefreshCw /> Segarkan data</> : "Hubungkan Health Connect"}</Button>
+          <button type="button" aria-label="Buka panel Health Connect" onClick={() => setHcExpanded(true)} className="grid size-11 shrink-0 place-items-center rounded-md bg-primary-foreground/15"><ChevronDown className="size-5" /></button>
+        </div>
       </section>
     ) : (
     <section className="rounded-lg bg-primary p-4 text-primary-foreground shadow-clay">
