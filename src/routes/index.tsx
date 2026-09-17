@@ -355,20 +355,58 @@ function HealthTracker() {
     setNotice(`Group ${groupName.trim()} berhasil dibuat.`);
     setGroupName("");
     setModal(null);
-    await loadData(userId);
+    await loadData(userId, email);
   }
 
   async function sendInvite() {
-    if (!inviteEmail.includes("@") || !userId || !group) {
+    const target = inviteEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target) || !userId || !group) {
       setNotice("Masukkan alamat email yang valid.");
       return;
     }
-    const { error } = await supabase.from("group_invites").insert({ group_id: group.id, invited_by: userId, email: inviteEmail.trim() });
+    if (target === email.trim().toLowerCase()) {
+      setNotice("Itu alamat emailmu sendiri.");
+      return;
+    }
+    if (sentInvites.some((row) => row.status === "pending" && row.email.toLowerCase() === target)) {
+      setNotice("Undangan ke alamat itu masih menunggu.");
+      return;
+    }
+    const { error } = await supabase.from("group_invites").insert({ group_id: group.id, invited_by: userId, email: target });
     if (error) {
       setNotice("Undangan belum berhasil dibuat. Silakan coba lagi.");
       return;
     }
     setInviteSent(true);
+    setInviteEmail("");
+    await loadData(userId, email);
+  }
+
+  async function revokeInvite(id: string) {
+    if (!userId) return;
+    const { error } = await supabase.from("group_invites").update({ status: "revoked" }).eq("id", id);
+    if (error) {
+      setNotice("Undangan belum bisa dibatalkan.");
+      return;
+    }
+    await loadData(userId, email);
+  }
+
+  async function acceptInvite(id: string) {
+    if (!userId) return;
+    const { error } = await supabase.rpc("accept_group_invite", { _invite_id: id });
+    if (error) {
+      setNotice("Undangan tidak berlaku lagi atau sudah kedaluwarsa.");
+      return;
+    }
+    setNotice("Kamu sudah bergabung ke group.");
+    await loadData(userId, email);
+  }
+
+  async function declineInvite(id: string) {
+    if (!userId) return;
+    await supabase.rpc("decline_group_invite", { _invite_id: id });
+    await loadData(userId, email);
   }
 
   async function connectHealthConnect() {
