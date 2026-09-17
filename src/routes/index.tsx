@@ -533,6 +533,37 @@ function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: M
     </section>
     <div className="mt-4 space-y-3">{metrics.map((item) => <section key={item.key} className="rounded-lg bg-card p-4 shadow-clay-sm"><div className="flex items-start gap-3"><div className={`grid size-10 place-items-center rounded-lg ${item.tone}`}><item.icon className="size-5" /></div><div className="flex-1"><div className="flex items-center justify-between"><h2 className="font-display font-semibold">{item.label}</h2><span className="font-display text-lg font-bold">{item.display}</span></div><p className="text-xs text-muted-foreground">{item.value === null ? "Belum ada data" : item.detail}</p><div className="mt-3 h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-secondary" style={{ width: `${item.percent}%` }} /></div></div></div></section>)}</div>
     {!hasData && <p className="mt-4 text-center text-[11px] leading-4 text-muted-foreground">Data akan muncul di sini setelah aplikasi pendamping mengirim rekam dari Health Connect.</p>}
+    <section className="mt-4 rounded-lg bg-card p-4 shadow-clay-sm">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-display font-semibold">Riwayat</h2>
+        <div className="grid grid-cols-3 gap-1 rounded-md bg-muted p-1">
+          {(Object.keys(periodMeta) as Period[]).map((key) => (
+            <button key={key} type="button" aria-pressed={period === key} onClick={() => setPeriod(key)} className={`rounded-sm px-2 py-1 text-[11px] font-semibold ${period === key ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{periodMeta[key].label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {(Object.keys(metricMeta) as MetricKey[]).map((key) => {
+          const Icon = metricMeta[key].icon;
+          const active = historyMetric === key;
+          return (
+            <button key={key} type="button" aria-pressed={active} onClick={() => setHistoryMetric(key)} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2 text-[11px] font-semibold ${active ? "bg-secondary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Icon className="size-3.5" />{metricMeta[key].label}</button>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[11px] font-medium text-primary/70">{periodMeta[period].title}{historyMetric !== "steps" && period !== "day" ? " · rata-rata per hari" : ""}</p>
+      {buckets.length === 0
+        ? <p className="mt-2 text-xs text-muted-foreground">Belum ada data {metricMeta[historyMetric].label.toLowerCase()} pada rentang ini.</p>
+        : <ul className="mt-2 divide-y divide-border/60">{buckets.map((bucket) => {
+          const max = Math.max(...buckets.map((b) => b.value), 1);
+          return (
+            <li key={bucket.key} className="py-2">
+              <div className="flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">{bucket.label}</span><span className="font-display text-sm font-bold">{formatMetric(historyMetric, bucket.value)}</span></div>
+              <div className="mt-1.5 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-secondary" style={{ width: `${Math.max(4, (bucket.value / max) * 100)}%` }} /></div>
+            </li>
+          );
+        })}</ul>}
+    </section>
   </div>;
 }
 
