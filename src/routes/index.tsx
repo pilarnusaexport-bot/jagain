@@ -91,6 +91,7 @@ function formatMetric(key: MetricKey, value: number | null): string {
 type HistoryRow = { metric_type: MetricKey; value: number; recorded_at: string };
 type InviteRow = { id: string; email: string; status: string; expires_at: string };
 type IncomingInvite = { id: string; groupName: string };
+type SharedMember = { user_id: string; display_name: string; avatar_url: string | null };
 type GroupInfo = { id: string; name: string; members: number; shared: number; isOwner: boolean };
 type Period = "day" | "week" | "month";
 type Bucket = { key: string; label: string; value: number };
@@ -183,18 +184,25 @@ function HealthTracker() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [sentInvites, setSentInvites] = useState<InviteRow[]>([]);
   const [incomingInvites, setIncomingInvites] = useState<IncomingInvite[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [sharedMembers, setSharedMembers] = useState<SharedMember[]>([]);
 
-  const loadData = useCallback(async (uid: string, userEmail?: string) => {
+  const loadData = useCallback(async (uid: string, userEmail?: string, targetUid?: string) => {
+    const viewUid = targetUid ?? uid;
+    const isOwnData = viewUid === uid;
     // Look back a few days: a phone may sync data that belongs to yesterday's
     // calendar day, so always show the most recent value we actually have.
     const windowStart = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
 
-    const [profileRes, recordsRes, linkRes, membershipRes] = await Promise.all([
+    const [profileRes, recordsRes, membershipRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url, birth_date, gender, share_health_by_default").eq("id", uid).maybeSingle(),
-      supabase.from("health_records").select("metric_type, value, recorded_at").eq("user_id", uid).gte("recorded_at", windowStart.toISOString()).order("recorded_at", { ascending: false }).limit(2000),
-      supabase.from("health_device_links").select("id, device_name, pair_token, status, last_sync_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("health_records").select("metric_type, value, recorded_at").eq("user_id", viewUid).gte("recorded_at", windowStart.toISOString()).order("recorded_at", { ascending: false }).limit(2000),
       supabase.from("group_members").select("group_id").eq("user_id", uid).limit(1).maybeSingle(),
     ]);
+
+    const linkRes = isOwnData
+      ? await supabase.from("health_device_links").select("id, device_name, pair_token, status, last_sync_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1).maybeSingle()
+      : { data: null, error: null };
 
     if (profileRes.data) setProfile(profileRes.data);
     setLink(linkRes.data ?? null);
@@ -218,7 +226,7 @@ function HealthTracker() {
     if (groupId) {
       const [groupRes, membersRes, invitesRes] = await Promise.all([
         supabase.from("health_groups").select("id, name, owner_id").eq("id", groupId).maybeSingle(),
-        supabase.from("group_members").select("id, can_view_health").eq("group_id", groupId),
+        supabase.from("group_members").select("id, user_id, can_view_health").eq("group_id", groupId),
         supabase.from("group_invites").select("id, email, status, expires_at").eq("group_id", groupId).order("created_at", { ascending: false }),
       ]);
       if (groupRes.data) {
@@ -231,9 +239,28 @@ function HealthTracker() {
         });
       }
       setSentInvites((invitesRes.data ?? []) as InviteRow[]);
+
+      // Fetch profiles of members who have shared their health records
+      const sharedIds = (membersRes.data ?? []).filter((m) => m.can_view_health && m.user_id !== uid).map((m) => m.user_id);
+      if (sharedIds.length > 0) {
+        const { data: memberProfiles } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", sharedIds);
+        setSharedMembers((memberProfiles ?? []).map((p) => ({ user_id: p.id, display_name: p.display_name ?? "Anggota", avatar_url: p.avatar_url ?? null })));
+      } else {
+        setSharedMembers([]);
+      }
+
+      // Reset selection if the member is no longer sharing
+      if (targetUid && !sharedIds.includes(targetUid)) {
+        setSelectedMemberId(null);
+      }
     } else {
       setGroup(null);
       setSentInvites([]);
+      setSharedMembers([]);
+      setSelectedMemberId(null);
     }
 
     // Invitations addressed to this user's email address.
@@ -255,6 +282,13 @@ function HealthTracker() {
       setIncomingInvites([]);
     }
   }, []);
+
+  async function changeMember(memberId: string | null) {
+    setSelectedMemberId(memberId);
+    if (userId) {
+      await loadData(userId, email, memberId ?? undefined);
+    }
+  }
 
   useEffect(() => {
     const onInstall = (event: Event) => {
@@ -502,7 +536,7 @@ function HealthTracker() {
           />
         )}
         {tab === "records" && (
-          <RecordsView metrics={metrics} history={history} link={link} onConnect={connectHealthConnect} onCopy={(text) => { void navigator.clipboard.writeText(text); setNotice("Disalin."); }} />
+          <RecordsView metrics={metrics} history={history} link={link} onConnect={connectHealthConnect} onCopy={(text) => { void navigator.clipboard.writeText(text); setNotice("Disalin."); }} sharedMembers={sharedMembers} selectedMemberId={selectedMemberId} onMemberChange={(id) => void changeMember(id)} />
         )}
         {tab === "profile" && (
           <ProfileView
@@ -618,15 +652,63 @@ function HomeView({ dateLabel, firstName, score, metrics, group, sentInvites, in
   </div>;
 }
 
-function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: Metric[]; history: HistoryRow[]; link: DeviceLink | null; onConnect: () => void; onCopy: (text: string) => void }) {
+function RecordsView({ metrics, history, link, onConnect, onCopy, sharedMembers, selectedMemberId, onMemberChange }: { metrics: Metric[]; history: HistoryRow[]; link: DeviceLink | null; onConnect: () => void; onCopy: (text: string) => void; sharedMembers: SharedMember[]; selectedMemberId: string | null; onMemberChange: (id: string | null) => void }) {
   const endpoint = typeof window === "undefined" ? "" : `${window.location.origin}/api/public/health-connect/hcwebhook`;
   const hasData = metrics.some((item) => item.value !== null);
   const [period, setPeriod] = useState<Period>("day");
   const [historyMetric, setHistoryMetric] = useState<MetricKey>("steps");
   const [hcExpanded, setHcExpanded] = useState(true);
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
   const buckets = useMemo(() => buildBuckets(history, historyMetric, period), [history, historyMetric, period]);
+  const selectedMember = sharedMembers.find((m) => m.user_id === selectedMemberId);
+  const isViewingShared = !!selectedMemberId && !!selectedMember;
   return <div className="animate-pop">
     <div className="mb-4"><p className="text-xs font-semibold text-primary/70">REKAM KESEHATAN</p><h1 className="font-display text-2xl font-bold">Aktivitas hari ini</h1></div>
+    {sharedMembers.length > 0 && (
+      <div className="relative mb-4">
+        <button type="button" onClick={() => setMemberDropdownOpen(!memberDropdownOpen)} className="flex w-full items-center justify-between rounded-lg bg-card p-3 shadow-clay-sm">
+          <div className="flex items-center gap-2.5">
+            {isViewingShared ? (
+              selectedMember!.avatar_url
+                ? <img src={selectedMember!.avatar_url} alt={selectedMember!.display_name} className="size-8 rounded-full object-cover" />
+                : <div className="grid size-8 place-items-center rounded-full bg-secondary font-display font-bold text-xs text-primary-foreground">{selectedMember!.display_name.charAt(0).toUpperCase()}</div>
+            ) : (
+              <div className="grid size-8 place-items-center rounded-full bg-primary/15"><UserRound className="size-4 text-primary" /></div>
+            )}
+            <div className="text-left">
+              <p className="text-sm font-semibold">{isViewingShared ? selectedMember!.display_name : "Akunku"}</p>
+              <p className="text-[11px] text-muted-foreground">{isViewingShared ? "Rekam dibagikan ke group" : "Data kesehatanku"}</p>
+            </div>
+          </div>
+          <ChevronDown className={`size-4 text-muted-foreground transition-transform ${memberDropdownOpen ? "rotate-180" : ""}`} />
+        </button>
+        {memberDropdownOpen && (
+          <div className="absolute top-full z-20 mt-1 w-full rounded-lg bg-card p-1 shadow-clay">
+            <button type="button" onClick={() => { onMemberChange(null); setMemberDropdownOpen(false); }} className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left ${!selectedMemberId ? "bg-secondary/15" : "hover:bg-muted"}`}>
+              <div className="grid size-8 place-items-center rounded-full bg-primary/15"><UserRound className="size-4 text-primary" /></div>
+              <div><p className="text-sm font-semibold">Akunku</p><p className="text-[11px] text-muted-foreground">Data kesehatanku</p></div>
+            </button>
+            {sharedMembers.map((m) => (
+              <button key={m.user_id} type="button" onClick={() => { onMemberChange(m.user_id); setMemberDropdownOpen(false); }} className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left ${selectedMemberId === m.user_id ? "bg-secondary/15" : "hover:bg-muted"}`}>
+                {m.avatar_url
+                  ? <img src={m.avatar_url} alt={m.display_name} className="size-8 rounded-full object-cover" />
+                  : <div className="grid size-8 place-items-center rounded-full bg-secondary font-display font-bold text-xs text-primary-foreground">{m.display_name.charAt(0).toUpperCase()}</div>}
+                <div><p className="text-sm font-semibold">{m.display_name}</p><p className="text-[11px] text-muted-foreground">Rekam dibagikan</p></div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+    {isViewingShared ? (
+      <section className="mb-4 rounded-lg bg-secondary/15 p-3">
+        <div className="flex items-center gap-2">
+          <Users className="size-4 shrink-0 text-primary" />
+          <p className="text-xs font-medium text-primary">Menampilkan Rekam dari <span className="font-semibold">{selectedMember!.display_name}</span></p>
+        </div>
+      </section>
+    ) : (
+    <>
     {!hcExpanded ? (
       <section className="rounded-lg bg-primary p-3 text-primary-foreground shadow-clay">
         <div className="flex items-center gap-2">
@@ -662,7 +744,9 @@ function RecordsView({ metrics, history, link, onConnect, onCopy }: { metrics: M
       )}
     </section>
     )}
-    {!hasData && <p className="mt-4 text-center text-[11px] leading-4 text-muted-foreground">Data akan muncul di sini setelah aplikasi pendamping mengirim rekam dari Health Connect.</p>}
+    </>
+    )}
+    {!hasData && <p className="mt-4 text-center text-[11px] leading-4 text-muted-foreground">{isViewingShared ? "Belum ada data yang dibagikan oleh anggota ini." : "Data akan muncul di sini setelah aplikasi pendamping mengirim rekam dari Health Connect."}</p>}
     <section className="mt-4 rounded-lg bg-card p-4 shadow-clay-sm">
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-display font-semibold">Riwayat</h2>
