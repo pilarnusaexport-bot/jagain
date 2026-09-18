@@ -3,8 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Bell,
+  CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Copy,
@@ -88,7 +90,14 @@ function formatMetric(key: MetricKey, value: number | null): string {
   return `${Math.round(value)} bpm`;
 }
 
-type HistoryRow = { metric_type: MetricKey; value: number; recorded_at: string };
+type HistoryRow = {
+  metric_type: MetricKey;
+  value: number;
+  recorded_at: string;
+  source: string;
+  sleep_start_at: string | null;
+  sleep_end_at: string | null;
+};
 type InviteRow = { id: string; email: string; status: string; expires_at: string };
 type IncomingInvite = { id: string; groupName: string };
 type SharedMember = { user_id: string; display_name: string; avatar_url: string | null };
@@ -165,6 +174,15 @@ function buildBuckets(history: HistoryRow[], metric: MetricKey, period: Period):
     }));
 }
 
+function dateKey(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function sourceLabel(source: string): string {
+  return source === "health_connect_webhook" ? "Health Connect Webhook" : "Health Connect";
+}
+
 function HealthTracker() {
   const [tab, setTab] = useState<Tab>("home");
   const [userId, setUserId] = useState<string | null>(null);
@@ -198,7 +216,7 @@ function HealthTracker() {
 
     const [profileRes, recordsRes, membershipRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url, birth_date, gender, share_health_by_default").eq("id", uid).maybeSingle(),
-      supabase.from("health_records").select("metric_type, value, recorded_at").eq("user_id", viewUid).gte("recorded_at", windowStart.toISOString()).order("recorded_at", { ascending: false }).limit(2000),
+      supabase.from("health_records").select("metric_type, value, recorded_at, source, sleep_start_at, sleep_end_at").eq("user_id", viewUid).gte("recorded_at", windowStart.toISOString()).order("recorded_at", { ascending: false }).limit(2000),
       supabase.from("group_members").select("group_id").eq("user_id", uid).limit(1).maybeSingle(),
     ]);
 
@@ -214,6 +232,9 @@ function HealthTracker() {
         metric_type: row.metric_type as MetricKey,
         value: Number(row.value),
         recorded_at: row.recorded_at as string,
+        source: row.source as string,
+        sleep_start_at: row.sleep_start_at as string | null,
+        sleep_end_at: row.sleep_end_at as string | null,
       })),
     );
 
@@ -703,6 +724,27 @@ function RecordsView({ metrics, history, link, onConnect, onCopy, sharedMembers,
   const [hcExpanded, setHcExpanded] = useState(false);
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
   const buckets = useMemo(() => buildBuckets(history, historyMetric, period), [history, historyMetric, period]);
+  const latestSleep = useMemo(() => history.find((row) => row.metric_type === "sleep") ?? null, [history]);
+  const [selectedSleepDate, setSelectedSleepDate] = useState("");
+  useEffect(() => {
+    if (!selectedSleepDate && latestSleep) setSelectedSleepDate(dateKey(latestSleep.recorded_at));
+  }, [latestSleep, selectedSleepDate]);
+  const selectedSleep = useMemo(
+    () => history.find((row) => row.metric_type === "sleep" && dateKey(row.recorded_at) === selectedSleepDate) ?? null,
+    [history, selectedSleepDate],
+  );
+  const selectedSleepDateValue = useMemo(() => {
+    if (selectedSleepDate) {
+      const [year, month, day] = selectedSleepDate.split("-").map(Number);
+      if (year && month !== undefined && day) return new Date(year, month, day);
+    }
+    return latestSleep ? new Date(latestSleep.recorded_at) : new Date();
+  }, [latestSleep, selectedSleepDate]);
+  const moveSleepDate = (amount: number) => {
+    const next = new Date(selectedSleepDateValue);
+    next.setDate(next.getDate() + amount);
+    setSelectedSleepDate(dateKey(next));
+  };
   const selectedMember = sharedMembers.find((m) => m.user_id === selectedMemberId);
   const isViewingShared = !!selectedMemberId && !!selectedMember;
   return <div className="animate-pop">
@@ -808,6 +850,48 @@ function RecordsView({ metrics, history, link, onConnect, onCopy, sharedMembers,
           );
         })}
       </div>
+      {historyMetric === "sleep" && period === "day" ? (
+        <div className="mt-4">
+          <div className="grid grid-cols-[2.75rem_1fr_2.75rem] items-center gap-2 rounded-md bg-muted p-1.5">
+            <Button type="button" variant="ghost" size="icon" aria-label="Hari sebelumnya" onClick={() => moveSleepDate(-1)}><ChevronLeft className="size-4" /></Button>
+            <div className="flex items-center justify-center gap-2 text-center">
+              <CalendarDays className="size-4 text-primary" />
+              <span className="text-sm font-semibold">{new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(selectedSleepDateValue)}</span>
+            </div>
+            <Button type="button" variant="ghost" size="icon" aria-label="Hari berikutnya" onClick={() => moveSleepDate(1)}><ChevronRight className="size-4" /></Button>
+          </div>
+          {selectedSleep ? (
+            <div className="mt-4">
+              <div className="flex items-center gap-2.5">
+                <div className="grid size-10 place-items-center rounded-full bg-secondary text-primary-foreground"><MoonStar className="size-5" /></div>
+                <h3 className="font-display text-xl font-bold">Tidur</h3>
+              </div>
+              <div className="mt-5 flex items-end gap-1.5">
+                <span className="font-display text-5xl font-bold leading-none">{Math.floor(selectedSleep.value / 60)}</span><span className="mb-1 font-display text-lg font-bold">jam</span>
+                <span className="font-display text-5xl font-bold leading-none">{Math.round(selectedSleep.value % 60)}</span><span className="mb-1 font-display text-lg font-bold">menit</span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">Sumber: {sourceLabel(selectedSleep.source)}</p>
+              <div className="mt-5 rounded-md bg-muted p-4">
+                {selectedSleep.sleep_start_at && selectedSleep.sleep_end_at ? (
+                  <>
+                    <div className="relative h-16">
+                      <div className="absolute inset-x-1 top-7 h-2 rounded-full bg-border" />
+                      <div className="absolute inset-x-1 top-7 h-2 rounded-full bg-secondary" />
+                      <div className="absolute left-0 top-3 grid size-9 place-items-center rounded-full bg-card text-primary shadow-clay-sm"><MoonStar className="size-4" /></div>
+                      <div className="absolute right-0 top-3 grid size-9 place-items-center rounded-full bg-card text-primary shadow-clay-sm"><Activity className="size-4" /></div>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <div><p className="text-[11px] text-muted-foreground">Mulai tidur</p><p className="font-display text-base font-bold">{new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit" }).format(new Date(selectedSleep.sleep_start_at))}</p></div>
+                      <div className="text-right"><p className="text-[11px] text-muted-foreground">Bangun</p><p className="font-display text-base font-bold">{new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit" }).format(new Date(selectedSleep.sleep_end_at))}</p></div>
+                    </div>
+                  </>
+                ) : <p className="py-3 text-center text-xs text-muted-foreground">Waktu mulai dan bangun tersedia setelah sinkronisasi berikutnya.</p>}
+              </div>
+              <p className="mt-3 text-[11px] leading-4 text-muted-foreground">Health Connect Webhook belum mengirim tahapan tidur Deep, Light, atau REM, jadi bagian tersebut tidak ditampilkan.</p>
+            </div>
+          ) : <p className="mt-4 text-center text-xs text-muted-foreground">Belum ada data tidur pada tanggal ini.</p>}
+        </div>
+      ) : <>
       <p className="mt-3 text-[11px] font-medium text-primary/70">{periodMeta[period].title}{historyMetric !== "steps" && period !== "day" ? " · rata-rata per hari" : ""}</p>
       {buckets.length === 0
         ? <p className="mt-2 text-xs text-muted-foreground">Belum ada data {metricMeta[historyMetric].label.toLowerCase()} pada rentang ini.</p>
@@ -820,6 +904,7 @@ function RecordsView({ metrics, history, link, onConnect, onCopy, sharedMembers,
             </li>
           );
         })}</ul>}
+      </>}
     </section>
   </div>;
 }
