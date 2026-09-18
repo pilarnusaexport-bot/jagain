@@ -700,7 +700,7 @@ function RecordsView({ metrics, history, link, onConnect, onCopy, sharedMembers,
   const hasData = metrics.some((item) => item.value !== null);
   const [period, setPeriod] = useState<Period>("day");
   const [historyMetric, setHistoryMetric] = useState<MetricKey>("steps");
-  const [hcExpanded, setHcExpanded] = useState(true);
+  const [hcExpanded, setHcExpanded] = useState(false);
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
   const buckets = useMemo(() => buildBuckets(history, historyMetric, period), [history, historyMetric, period]);
   const selectedMember = sharedMembers.find((m) => m.user_id === selectedMemberId);
