@@ -229,6 +229,10 @@ export type Database = {
     Functions: {
       accept_group_invite: { Args: { _invite_id: string }; Returns: string }
       decline_group_invite: { Args: { _invite_id: string }; Returns: undefined }
+      shares_group_with: {
+        Args: { _target: string; _viewer: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
