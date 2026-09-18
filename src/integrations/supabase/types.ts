@@ -157,6 +157,8 @@ export type Database = {
           metric_type: string
           recorded_at: string
           shared_with_groups: boolean
+          sleep_end_at: string | null
+          sleep_start_at: string | null
           source: string
           unit: string
           updated_at: string
@@ -169,6 +171,8 @@ export type Database = {
           metric_type: string
           recorded_at: string
           shared_with_groups?: boolean
+          sleep_end_at?: string | null
+          sleep_start_at?: string | null
           source?: string
           unit: string
           updated_at?: string
@@ -181,6 +185,8 @@ export type Database = {
           metric_type?: string
           recorded_at?: string
           shared_with_groups?: boolean
+          sleep_end_at?: string | null
+          sleep_start_at?: string | null
           source?: string
           unit?: string
           updated_at?: string
