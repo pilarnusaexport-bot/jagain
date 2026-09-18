@@ -50,11 +50,19 @@ function dayKey(iso: string): string | null {
   return shifted.toISOString().slice(0, 10);
 }
 
-type Row = { metric_type: string; value: number; unit: string; recorded_at: string; source: string };
+type Row = {
+  metric_type: string;
+  value: number;
+  unit: string;
+  recorded_at: string;
+  source: string;
+  sleep_start_at?: string;
+  sleep_end_at?: string;
+};
 
 function buildRows(payload: Payload): Row[] {
   const steps = new Map<string, number>();
-  const sleep = new Map<string, number>();
+  const sleep = new Map<string, { totalMinutes: number; startAt: number; endAt: number }>();
   const heart = new Map<string, { sum: number; count: number }>();
 
   for (const record of payload.steps ?? []) {
@@ -63,7 +71,15 @@ function buildRows(payload: Payload): Row[] {
   }
   for (const record of payload.sleep ?? []) {
     const key = dayKey(record.session_end_time);
-    if (key) sleep.set(key, (sleep.get(key) ?? 0) + record.duration_seconds / 60);
+    const endAt = new Date(record.session_end_time).getTime();
+    if (!key || Number.isNaN(endAt)) continue;
+    const startAt = endAt - record.duration_seconds * 1000;
+    const current = sleep.get(key);
+    sleep.set(key, {
+      totalMinutes: (current?.totalMinutes ?? 0) + record.duration_seconds / 60,
+      startAt: Math.min(current?.startAt ?? startAt, startAt),
+      endAt: Math.max(current?.endAt ?? endAt, endAt),
+    });
   }
   for (const record of payload.heart_rate ?? []) {
     const key = dayKey(record.time);
@@ -79,7 +95,15 @@ function buildRows(payload: Payload): Row[] {
     rows.push({ metric_type: "steps", value: Math.round(value), unit: "langkah", recorded_at: at(key), source: "health_connect_webhook" });
   }
   for (const [key, value] of sleep) {
-    rows.push({ metric_type: "sleep", value: Math.round(value), unit: "menit", recorded_at: at(key), source: "health_connect_webhook" });
+    rows.push({
+      metric_type: "sleep",
+      value: Math.round(value.totalMinutes),
+      unit: "menit",
+      recorded_at: at(key),
+      source: "health_connect_webhook",
+      sleep_start_at: new Date(value.startAt).toISOString(),
+      sleep_end_at: new Date(value.endAt).toISOString(),
+    });
   }
   for (const [key, bucket] of heart) {
     rows.push({ metric_type: "heart_rate", value: Math.round(bucket.sum / bucket.count), unit: "bpm", recorded_at: at(key), source: "health_connect_webhook" });

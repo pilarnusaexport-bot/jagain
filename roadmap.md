@@ -2,3 +2,4 @@
 - Fitur Gulir di tab Rekam: dropdown untuk pilih "Akunku" (data sendiri) atau ganti ke akun anggota group yang sudah share Rekamnya (17 Sep 2026)
 - Home group card: klik untuk expand daftar anggota keluarga; klik nama anggota yang sudah share → otomatis ke tab Rekam dengan Gulir terpilih ke anggota tersebut (17 Sep 2026)
 - Catatan: Supabase RLS policy untuk health_records perlu diupdate supaya anggota group bisa SELECT data rekan yang can_view_health=true
+- Rekam > Tidur > Harian: detail satu tanggal dengan durasi, sumber, dan rentang waktu tidur nyata dari Health Connect (18 Sep 2026)
